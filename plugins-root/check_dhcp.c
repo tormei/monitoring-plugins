@@ -199,6 +199,7 @@ typedef struct requested_server_struct{
 #define ETHERNET_HARDWARE_ADDRESS_LENGTH     6     /* length of Ethernet hardware addresses */
 
 u_int8_t unicast = 0;        /* unicast mode: mimic a DHCP relay */
+u_int8_t custom_giaddr = 0;	 /* use specific IP for DHCP relay */
 struct in_addr my_ip;        /* our address (required for relay) */
 struct in_addr dhcp_ip;      /* server to query (if in unicast mode) */
 unsigned char client_hardware_address[MAX_DHCP_CHADDR_LENGTH]="";
@@ -225,6 +226,7 @@ int request_specific_address=FALSE;
 int received_requested_address=FALSE;
 int verbose=0;
 struct in_addr requested_address;
+struct in_addr giaddr_ip;
 
 
 int process_arguments(int, char **);
@@ -265,11 +267,11 @@ int main(int argc, char **argv){
 
 	/* Parse extra opts if any */
 	argv=np_extra_opts(&argc, argv, progname);
-
+	printf("extra opt parsed!\n");
 	if(process_arguments(argc,argv)!=OK){
 		usage4 (_("Could not parse arguments"));
 		}
-
+	printf("all arguments parsed!\n");
 	/* create socket for DHCP communications */
 	dhcp_socket=create_dhcp_socket();
 
@@ -431,6 +433,10 @@ int get_ip_address(int sock,char *interface_name){
 		}
 
 	my_ip=((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr;
+	if(custom_giaddr)
+	{
+		my_ip=giaddr_ip;
+	}
 
 #else
 	printf(_("Error: Cannot get interface IP address on this platform.\n"));
@@ -1057,8 +1063,9 @@ int process_arguments(int argc, char **argv){
 
 	if(argc<1)
 		return ERROR;
-
+	printf("call_getopts\n");
 	arg_index = call_getopt(argc,argv);
+	printf("validate_arguments\n");
 	return validate_arguments(argc,arg_index);
         }
 
@@ -1074,7 +1081,7 @@ int call_getopt(int argc, char **argv){
 		{"timeout",        required_argument,0,'t'},
 		{"interface",      required_argument,0,'i'},
 		{"mac",            required_argument,0,'m'},
-		{"unicast",        no_argument,      0,'u'},
+		{"unicast",        optional_argument,0,'u'},
 		{"verbose",        no_argument,      0,'v'},
 		{"version",        no_argument,      0,'V'},
 		{"help",           no_argument,      0,'h'},
@@ -1084,7 +1091,7 @@ int call_getopt(int argc, char **argv){
 	while(1){
 		int c=0;
 
-		c=getopt_long(argc,argv,"+hVvt:s:r:t:i:m:u",long_options,&option_index);
+		c=getopt_long(argc,argv,"+hVvt:s:r:t:i:m:u:64",long_options,&option_index);
 
 		if(c==-1||c==EOF||c==1)
 			break;
@@ -1132,6 +1139,15 @@ int call_getopt(int argc, char **argv){
 
 		case 'u': /* unicast testing */
 			unicast=1;
+			printf("Yeah, I found U\n");
+			printf(optarg);
+			if(optarg > 0)
+			{
+				printf("Yeah, I found U with an Argument");
+				resolve_host(optarg, &giaddr_ip);
+				custom_giaddr=1;
+				optind++;
+			}
 			break;
 
 		case 'V': /* version */
@@ -1160,6 +1176,7 @@ int call_getopt(int argc, char **argv){
 
 int validate_arguments(int argc, int arg_index){
 
+	printf("argc=%i optind=%i\n", argc, optind);
 	if(argc-optind > 0)
 		usage(_("Got unexpected non-option argument"));
 
